@@ -246,7 +246,7 @@ include(VersionFromVCS)
 option(LLVM_APPEND_VC_REV
   "Embed the version control system revision in LLVM" ON)
 
-set(PACKAGE_NAME LLVM)
+set(PACKAGE_NAME Obfuscator-LLVM)
 set(PACKAGE_STRING "${PACKAGE_NAME} ${PACKAGE_VERSION}")
 set(PACKAGE_BUGREPORT "https://github.com/llvm/llvm-project/issues/")
 

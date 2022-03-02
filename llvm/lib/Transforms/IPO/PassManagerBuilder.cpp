@@ -52,6 +52,13 @@
 #include "llvm/Transforms/Vectorize/SLPVectorizer.h"
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
 
+#include "llvm/Transforms/Obfuscation/BogusControlFlow.h"
+#include "llvm/Transforms/Obfuscation/Flattening.h"
+#include "llvm/Transforms/Obfuscation/Split.h"
+#include "llvm/Transforms/Obfuscation/Substitution.h"
+#include "llvm/Transforms/Obfuscation/StringObfuscation.h"
+#include "llvm/Transforms/Obfuscation/CryptoUtils.h"
+
 using namespace llvm;
 
 namespace llvm {
@@ -148,6 +155,28 @@ cl::opt<bool>
     EnableGVNSink("enable-gvn-sink", cl::init(false), cl::ZeroOrMore,
                   cl::desc("Enable the GVN sinking pass (default = off)"));
 
+// Flags for obfuscation
+static cl::opt<bool> Flattening("fla", cl::init(false),
+                                cl::desc("Enable the flattening pass"));
+
+static cl::opt<bool> BogusControlFlow("bcf", cl::init(false),
+                                      cl::desc("Enable bogus control flow"));
+
+static cl::opt<bool> Substitution("sub", cl::init(false),
+                                  cl::desc("Enable instruction substitutions"));
+
+static cl::opt<std::string> AesSeed("aesSeed", cl::init(""),
+                                    cl::desc("seed for the AES-CTR PRNG"));
+
+static cl::opt<bool> Split("split", cl::init(false),
+                           cl::desc("Enable basic block splitting"));
+
+static cl::opt<std::string> Seed("seed", cl::init(""),
+                           cl::desc("seed for the random"));
+
+static cl::opt<bool> StringObf("sobf", cl::init(false),
+                           cl::desc("Enable the string obfuscation"));
+
 // This option is used in simplifying testing SampleFDO optimizations for
 // profile loading.
 cl::opt<bool>
@@ -220,6 +249,20 @@ PassManagerBuilder::PassManagerBuilder() {
     PerformThinLTO = EnablePerformThinLTO;
     DivergentTarget = false;
     CallGraphProfile = true;
+
+    // Initialization of the global cryptographically
+    // secure pseudo-random generator
+    if(!AesSeed.empty()) {
+        if(!llvm::cryptoutils->prng_seed(AesSeed.c_str())) {
+          exit(1);
+        }
+    }
+
+    //random generator
+    if(!Seed.empty()) {
+        if(!llvm::cryptoutils->prng_seed(Seed.c_str()))
+          exit(1);
+    }
 }
 
 PassManagerBuilder::~PassManagerBuilder() {
@@ -675,6 +718,14 @@ void PassManagerBuilder::populateModulePassManager(
   // Allow forcing function attributes as a debugging and tuning aid.
   MPM.add(createForceFunctionAttrsLegacyPass());
 
+  MPM.add(createSplitBasicBlock(Split));
+  MPM.add(createBogus(BogusControlFlow));
+  #if LLVM_VERSION_MAJOR >= 9
+    MPM.add(createLowerSwitchPass());
+  #endif
+  MPM.add(createFlattening(Flattening));
+  MPM.add(createStringObfuscation(StringObf));
+
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
   if (OptLevel == 0) {
@@ -702,6 +753,8 @@ void PassManagerBuilder::populateModulePassManager(
       MPM.add(createEliminateAvailableExternallyPass());
       MPM.add(createGlobalDCEPass());
     }
+
+    MPM.add(createSubstitution(Substitution));
 
     addExtensionsToPM(EP_EnabledOnOptLevel0, MPM);
 
@@ -969,6 +1022,8 @@ void PassManagerBuilder::populateModulePassManager(
   // passes to avoid re-sinking, but before SimplifyCFG because it can allow
   // flattening of blocks.
   MPM.add(createDivRemPairsPass());
+
+  MPM.add(createSubstitution(Substitution));
 
   // LoopSink (and other loop passes since the last simplifyCFG) might have
   // resulted in single-entry-single-exit or empty blocks. Clean up the CFG.
