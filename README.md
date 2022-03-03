@@ -106,7 +106,9 @@ This is an example work-flow and configuration to get and build the LLVM source:
           CPUs you have.
 
       * This is an example of building the LLVM and clang:
-        * ``cmake -S llvm -B build -G Ninja -DLLVM_ENABLE_PROJECTS="clang" -DCMAKE_BUILD_TYPE=Release -DLLVM_INCLUDE_TESTS=OFF -DLLVM_USE_NEWPM=OFF``
+        * ``cmake -S llvm -B build -G Ninja -DLLVM_ENABLE_PROJECTS=clang -DCMAKE_BUILD_TYPE=Release -DLLVM_INCLUDE_TESTS=OFF -DLLVM_ENABLE_NEW_PASS_MANAGER=OFF``
+
+        * ``cmake --build build -j16``
 
       * For more information see [CMake](https://llvm.org/docs/CMake.html)
 
